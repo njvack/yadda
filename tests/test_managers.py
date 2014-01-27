@@ -1,5 +1,9 @@
+# coding: utf8
+# Part of yadda -- a simple dicom file uploader
+#
+# Copyright 2014 Board of Regents of the University of Wisconsin Systemimport pytest
+
 import pytest
-import yadda
 from yadda import managers
 
 
