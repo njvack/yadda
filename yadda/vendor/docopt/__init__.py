@@ -1,1 +1,1 @@
-import docopt
+from docopt import *
