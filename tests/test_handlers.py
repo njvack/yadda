@@ -15,8 +15,8 @@ class DummyManager(object):
 
 
 class TestHandler(handlers.ThreadedDicomHandler):
-    def __init__(self, timeout, name, manager):
-        super(TestHandler, self).__init__(timeout, name, manager)
+    def __init__(self, manager, name, timeout):
+        super(TestHandler, self).__init__(manager, name, timeout)
         self.startered = False
         self.handlered = False
         self.finished = False
@@ -36,7 +36,7 @@ class TestHandler(handlers.ThreadedDicomHandler):
 
 def test_threaded_handler_joins():
     mgr = DummyManager()
-    h = TestHandler(0.1, "test", mgr)
+    h = TestHandler(mgr, "test", 0.1)
     with pytest.raises(RuntimeError):
         h.handle_dicom("foo")
     assert not h.handlered
@@ -51,7 +51,7 @@ def test_threaded_handler_terminates():
     timeout=10
     start = time.clock()
     mgr = DummyManager()
-    h = TestHandler(timeout, "test", mgr)
+    h = TestHandler(mgr, "test", timeout)
     h.start()
     assert h.startered
     h.terminate()

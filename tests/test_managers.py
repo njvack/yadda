@@ -1,15 +1,24 @@
 # coding: utf8
 # Part of yadda -- a simple dicom file uploader
 #
-# Copyright 2014 Board of Regents of the University of Wisconsin Systemimport pytest
+# Copyright 2014 Board of Regents of the University of Wisconsin System
 
 import pytest
 from yadda import managers
 
 
+class DummyManager(managers.ThreadedDicomManager):
+
+    def handler_key(self, obj):
+        return obj
+
+    def build_handler(self, dcm):
+        return DummyHandler(self, str(dcm), 0)
+
+
 class DummyHandler(object):
 
-    def __init__(self, name, manager):
+    def __init__(self, manager, name, timeout):
         self.name = name
         self.manager = manager
         self.handle_count = 0
@@ -30,12 +39,12 @@ class DummyHandler(object):
 
 
 def test_creating_manager():
-    mgr = managers.ThreadedDicomManager(0, str, DummyHandler)
+    mgr = DummyManager(0)
     assert mgr
 
 
 def test_manager_starts_and_stops():
-    mgr = managers.ThreadedDicomManager(0, str, DummyHandler)
+    mgr = DummyManager(0)
     mgr.handle_dicom("foo")
     handler = mgr._series_handlers['foo']
     assert handler

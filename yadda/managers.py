@@ -10,43 +10,58 @@ as well as handing off incoming files to the appropriate one.
 
 import threading
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
 
 class ThreadedDicomManager(object):
     """
-    Generic wrapper for all incoming dicoms -- reads a dicom, gets its
-    series_unique_key, and builds a DicomSeriesHandler for it.
+    Superclass for dicom managers -- the things that will get dicoms,
+    build handlers for them, and pass the dicoms on to them.
+
     """
 
-    def __init__(self, timeout, dicom_key_fx, handler_factory):
+    def __init__(self, timeout):
         """
         Build a new DicomManager.
         timeout: The time this manager should wait for handlers to finish.
         dicom_key_fx: Returns a string uniquely identifying a dicom's series,
         given a dicom object
-        handler_factory: Creates a new dicom handler, is passed an example
-        dicom, name, and self.
         """
         self.timeout = timeout
-        self.dicom_key_fx = dicom_key_fx
-        self.handler_factory = handler_factory
         self._series_handlers = {}
         self._mutex = threading.Condition()
 
-    def handle_dicom(self, dcm):
-        key = self.dicom_key_fx(dcm)
+    def handle_dicom(self, dcm, *args, **kwargs):
+        key = self.handler_key(dcm)
         with self._mutex:
             if key not in self._series_handlers:
-                logger.debug("Setting up handler for key: %s" % (key))
-                self._series_handlers[key] = self._setup_handler(dcm)
+                logger.debug("Setting up handler for key: {0}".format(key))
+                self._series_handlers[key] = self._setup_handler(
+                    dcm, *args, **kwargs)
         handler = self._series_handlers[key]
-        handler.handle_dicom(dcm)
+        handler.handle_dicom(dcm, *args, **kwargs)
 
-    def _setup_handler(self, dcm):
-        dsh = self.handler_factory(dcm, self)
+    def handler_key(self, dcm):
+        """
+        A string to group a set of dicoms (eg, series number).
+
+        You must override this in a subclass.
+
+        """
+        raise NotImplementedError()
+
+    def build_handler(self, dcm, *args, **kwargs):
+        """
+        Build a new DicomSeriesHandler.
+
+        You must override this in a subclass.
+
+        """
+        raise NotImplementedError()
+
+    def _setup_handler(self, dcm, *args, **kwargs):
+        dsh = self.build_handler(dcm, *args, **kwargs)
         dsh.start()
         return dsh
 
@@ -58,5 +73,3 @@ class ThreadedDicomManager(object):
     def wait_for_handlers(self):
         for handler in self._series_handlers.values():
             handler.join(self.timeout)
-
-
