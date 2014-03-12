@@ -19,7 +19,6 @@ import sys
 import os
 import shutil
 import logging
-import time
 logger = logging.getLogger(__name__)
 
 from watchdog.events import FileSystemEventHandler, FileCreatedEvent
@@ -70,9 +69,9 @@ def dicom_watch_sort(source_dir, dest_dir, timeout):
     observer.schedule(handler, source_dir, recursive=True)
     observer.start()
     try:
-        while True:
-            time.sleep(1)
+        manager.wait_for_files()
     except KeyboardInterrupt:
+        logger.warn("Keyboard Interrupt!")
         observer.stop()
         manager.stop()
 
@@ -98,17 +97,27 @@ class FileChangeHandler(FileSystemEventHandler):
 class SortingDicomManager(managers.ThreadedDicomManager):
     def __init__(self, timeout, destination_base):
         self.destination_base = destination_base
+        self._stop = False
         super(SortingDicomManager, self).__init__(timeout)
 
     def handler_key(self, dicom):
         return str(dicom.SeriesNumber)
 
+    def wait_for_files(self):
+        with self._mutex:
+            while not self._stop:
+                self._mutex.wait(self.timeout)
+
     def handle_file(self, filename):
+        if self._stop:
+            return
         try:
             dcm = dicom.read_file(filename)
         except dicom.filereader.InvalidDicomError:
             return
-        self.handle_dicom(dcm, filename)
+        with self._mutex:
+            self.handle_dicom(dcm, filename)
+            self._mutex.notify()
 
     def handle_dicom(self, dcm, filename):
         logger.debug((dcm.SeriesNumber, filename))
@@ -121,8 +130,12 @@ class SortingDicomManager(managers.ThreadedDicomManager):
             self, series_number, self.timeout, dest_dir)
 
     def stop(self):
+        with self._mutex:
+            self._stop = True
+            self._mutex.notify()
         for handler in self._series_handlers.values():
             handler.terminate()
+            handler.join()
 
 
 class SortingDicomHandler(handlers.ThreadedDicomHandler):
@@ -133,7 +146,8 @@ class SortingDicomHandler(handlers.ThreadedDicomHandler):
     def on_start(self):
         logger.info("{0}: creating {1}".format(self, self.dest_dir))
         try:
-            os.makedirs(self.dest_dir)
+            pass
+            # os.makedirs(self.dest_dir)
         except OSError as err:
             logger.warn(str(err))
 
@@ -141,7 +155,9 @@ class SortingDicomHandler(handlers.ThreadedDicomHandler):
         logger.info("{0}: {1} => {2}".format(
             self, filename, self.dest_dir))
         try:
-            shutil.move(filename, self.dest_dir)
+            pass
+            os.remove(filename)
+            # shutil.move(filename, self.dest_dir)
         except OSError as e:
             logger.warn(e)
 
@@ -150,6 +166,10 @@ class SortingDicomHandler(handlers.ThreadedDicomHandler):
 
     def __str__(self):
         return self.name
+
+    def terminate(self):
+        logger.warn("{0}: Terminating!".format(self))
+        super(SortingDicomHandler, self).terminate()
 
 
 if __name__ == '__main__':
