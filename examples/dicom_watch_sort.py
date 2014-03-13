@@ -17,7 +17,6 @@ from __future__ import with_statement, division, print_function
 
 import sys
 import os
-import shutil
 import logging
 logger = logging.getLogger(__name__)
 
