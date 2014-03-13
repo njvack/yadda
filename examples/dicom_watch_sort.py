@@ -108,15 +108,11 @@ class SortingDicomManager(managers.ThreadedDicomManager):
                 self._mutex.wait(self.timeout)
 
     def handle_file(self, filename):
-        if self._stop:
-            return
         try:
             dcm = dicom.read_file(filename)
         except dicom.filereader.InvalidDicomError:
             return
-        with self._mutex:
-            self.handle_dicom(dcm, filename)
-            self._mutex.notify()
+        self.handle_dicom(dcm, filename)
 
     def handle_dicom(self, dcm, filename):
         logger.debug((dcm.SeriesNumber, filename))
@@ -127,14 +123,6 @@ class SortingDicomManager(managers.ThreadedDicomManager):
         dest_dir = os.path.join(self.destination_base, series_number)
         return SortingDicomHandler(
             self, series_number, self.timeout, dest_dir)
-
-    def stop(self):
-        with self._mutex:
-            self._stop = True
-            self._mutex.notify()
-        for handler in self._series_handlers.values():
-            handler.terminate()
-            handler.join()
 
 
 class SortingDicomHandler(handlers.ThreadedDicomHandler):
