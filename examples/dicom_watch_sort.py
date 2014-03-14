@@ -96,16 +96,10 @@ class FileChangeHandler(FileSystemEventHandler):
 class SortingDicomManager(managers.ThreadedDicomManager):
     def __init__(self, timeout, destination_base):
         self.destination_base = destination_base
-        self._stop = False
         super(SortingDicomManager, self).__init__(timeout)
 
     def handler_key(self, dicom):
         return str(dicom.SeriesNumber)
-
-    def wait_for_files(self):
-        with self._mutex:
-            while not self._stop:
-                self._mutex.wait(self.timeout)
 
     def handle_file(self, filename):
         try:
