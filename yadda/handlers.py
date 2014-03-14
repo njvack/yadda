@@ -84,4 +84,4 @@ class ThreadedDicomHandler(threading.Thread):
         logger.debug("%s - handling dicom" % (self))
 
     def __str__(self):
-        return "%s" % (self.name)
+        return self.name
