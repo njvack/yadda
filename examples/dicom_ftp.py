@@ -8,17 +8,16 @@ DATE-EXAM-SERIES
 This script relies on pyinotify, and will hence run only on linux.
 
 Usage:
-  dicom_ftp.py [options] <source_dir> <host>
+  dicom_ftp.py [options] <source_dir> <host> [<port>]
 
 Options:
-  --dest-dir=<dir>  Base directory on host to put files
-  --port=<port>     Port to connect to [default: 21]
-  --username=<user> FTP username [default: anonymous]
-  --password=<pw>   FTP password
-  --timeout=<sec>   Timeout (in seconds) to wait for more files in a series
-                    [default: 30]
-  --verbose, -v     Show lots of debugging.
-  -h                Show this help screen
+  --dest-dir <dir>   Base directory on host to put files
+  --user <user>      FTP username [default: anonymous]
+  --password <pw>    FTP password
+  --timeout <sec>    Timeout (in seconds) to wait for more files in a series
+                     [default: 30]
+  --verbose, -v      Show lots of debugging.
+  -h                 Show this help screen
 
 """
 from __future__ import with_statement, division, print_function
@@ -34,13 +33,28 @@ import yadda
 from yadda import handlers, managers
 
 from yadda.vendor.docopt import docopt
-from yadda.vendor.schema import Schema, Use
+from yadda.vendor.schema import Schema, Use, SchemaError
 from yadda.vendor import pyinotify
 import dicom
 
+
+class UseDefault(object):
+    def __init__(self, _callable, _default):
+        self._callable = _callable
+        self._default = _default
+
+    def validate(self, data):
+        if data is None:
+            return self._default
+        try:
+            return self._callable(data)
+        except Exception as e:
+            raise SchemaError('%r raised %r' % (self._callable.__name__, e))
+
+
 SCHEMA = Schema({
     '<source_dir>': Use(os.path.expanduser),
-    '--port': Use(int),
+    '<port>': UseDefault(int, 21),
     '--timeout': Use(float),
     str: object})
 
@@ -58,9 +72,9 @@ def main():
         source_dir=validated['<source_dir>'],
         timeout=validated['--timeout'],
         host=validated['<host>'],
-        port=validated['--port'],
-        ftp_user=validated['--username'],
-        ftp_pw=validated.get('--password'),
+        port=validated['<port>'],
+        ftp_user=validated['--user'],
+        ftp_pw=validated['--password'],
         initial_dir=validated.get('--dest-dir'))
 
 
@@ -100,11 +114,10 @@ class FileChangeHandler(pyinotify.ProcessEvent):
         if event.dir:
             return
         logger.debug('Processing {0}'.format(event.pathname))
-        try:
-            self.dicom_manager.handle_file(event.pathname)
-        except Exception as exc:
-            logger.error('Error processing {0}: {1}'.format(
-                event.pathname, exc))
+        self.dicom_manager.handle_file(event.pathname)
+        # except Exception as exc:
+        #     logger.error('Error processing {0}: {1}'.format(
+        #         event.pathname, exc))
 
     process_IN_MOVED_TO = process_event
     process_IN_CLOSE_WRITE = process_event
@@ -171,7 +184,7 @@ class FTPDicomHandler(handlers.ThreadedDicomHandler):
             logger.debug('{0}: cwd to {1}'.format(self, self.initial_dir))
             self.ftp.cwd(self.initial_dir)
         dir_name = '.'+str(self)
-        logger.debug('{0]: Creating directory {1}'.format(self, dir_name))
+        logger.debug('{0}: Creating directory {1}'.format(self, dir_name))
         self.ftp.mkd(dir_name)
         self.ftp.cwd(dir_name)
         logger.info('{0}: Ready to upload')
@@ -191,7 +204,7 @@ class FTPDicomHandler(handlers.ThreadedDicomHandler):
 
     def terminate(self):
         logger.warn('{0}: Forcing quit!'.format(self))
-        super(MyDicomHandler, self).terminate()
+        super(FTPDicomHandler, self).terminate()
 
 
 if __name__ == '__main__':
